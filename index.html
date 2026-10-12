@@ -122,6 +122,9 @@ h1,h2,h3{margin:0 0 12px}
 .pk .slots span.op.just{background:var(--hit);color:#fff}
 .turn-now .bonus-lbl{display:inline-block;background:var(--ok);color:#10301c;border-radius:8px;padding:2px 10px;font-weight:900;font-size:16px;margin-top:2px}
 .reveal .res .bonus{color:#2b8a3e;font-size:22px}
+.reveal .auto-next{text-align:center;font-weight:800;color:#555;font-size:15px}
+.reveal .auto-next b{font-size:30px;color:#1d1d1f;margin-right:2px}
+.reveal .auto-next button{margin-top:4px;background:#e3e6ec;color:#1d1d1f}
 .pk .nm{font-size:19px;font-weight:900;line-height:1.2;word-break:break-all}
 .pk .nm.dim{color:#8790a8}
 .pk .letters{display:flex;flex-wrap:wrap;gap:3px;justify-content:center;min-height:26px}
@@ -337,12 +340,12 @@ function openedLetters(name, chars){ const seen=new Set(), out=[]; [...name].for
 function pkHas(pk, kind, v){ return kind==='type' ? pk.t.includes(v) : pk.n.includes(v); }
 
 /* ---------- 設定 ---------- */
-function defaultSettings(){ return { selectSec:45, answerSec:45 }; }
+function defaultSettings(){ return { selectSec:45, answerSec:45, bonusSec:45, revealSec:5 }; }
 const DEFAULT_RULE_SLIDES=[{img:null, groups:[
   '全員のスマホに<b>6匹のポケモン</b>が配られます。その中から<b>3匹</b>を選んで手持ちにします。',
   '回答順に、<span class="rule-red">文字を最大2つ</span> か <span class="rule-red">タイプを1つ</span> 選んでコールします。',
   'コールした文字・タイプが、誰かのポケモン（自分のポケモンも！）に含まれていたらオープンされます。<br>オープンした文字は「何文字目か」も分かります。',
-  'ほかの人のポケモンに含まれていたら正解！ 続けて<span class="rule-red">もう1回だけ、文字を1つ</span>選べます（タイプは選べません）。',
+  'ほかの人のポケモンに含まれていたら正解！ 続けて<span class="rule-red">もう1回だけ、文字を1つ か タイプを1つ</span>選べます。',
   '手持ち3匹の<b>名前がすべてオープン</b>されたら負け。最後まで残った人の勝ちです！'
 ]}];
 /* 以前の初期ルール（管理画面で書き換えていなければ、新しい初期ルールに自動で置き換える） */
@@ -351,11 +354,17 @@ const OLD_DEFAULT_RULE_TEXTS=[[
   '回答順に、文字を最大2つ か タイプを1つ 選んでコールします。',
   'コールした文字・タイプが、誰かのポケモン（自分のポケモンも！）に含まれていたらオープンされます。',
   '手持ち3匹の名前がすべてオープンされたら負け。最後まで残った人の勝ちです！'
+],[
+  '全員のスマホに6匹のポケモンが配られます。その中から3匹を選んで手持ちにします。',
+  '回答順に、文字を最大2つ か タイプを1つ 選んでコールします。',
+  'コールした文字・タイプが、誰かのポケモン（自分のポケモンも！）に含まれていたらオープンされます。オープンした文字は「何文字目か」も分かります。',
+  'ほかの人のポケモンに含まれていたら正解！ 続けてもう1回だけ、文字を1つ選べます（タイプは選べません）。',
+  '手持ち3匹の名前がすべてオープンされたら負け。最後まで残った人の勝ちです！'
 ]];
 function defaultAppData(){ return { memo:'', ruleSlides:JSON.parse(JSON.stringify(DEFAULT_RULE_SLIDES)), settings:defaultSettings() }; }
 function normalizeSettings(s){
   const d=defaultSettings(); s=Object.assign({}, d, s||{});
-  ['selectSec','answerSec'].forEach(k=>{ const v=toInt(s[k]); s[k]=isNaN(v)||v<1?d[k]:v; });
+  ['selectSec','answerSec','bonusSec','revealSec'].forEach(k=>{ const v=toInt(s[k]); s[k]=isNaN(v)||v<1?d[k]:v; });
   return s;
 }
 function mergeAppData(d){
@@ -443,6 +452,7 @@ async function initHost(){
     const g=G();
     if(g && gs.phase==='select') g.selEndsAt=Date.now()+S().selectSec*1000;
     if(g && gs.phase==='turn' && g.turn){ g.turn.endsAt=Date.now()+g.turn.durMs; }
+    if(g && gs.phase==='reveal') g.revealEndsAt=Date.now()+S().revealSec*1000;
     startPeer(room, 0);
   } else {
     localStorage.removeItem(LS.state); localStorage.removeItem(LS.room);
@@ -552,10 +562,9 @@ function handleSubMessage(conn, data){
   if(data.type==='answer'){
     if(gs.phase!=='turn' || !g || !g.turn || g.turn.pid!==pid || data.turnId!==g.turn.id) return;
     const kind=data.kind==='type'?'type':'chars';
-    if(g.turn.bonus && kind!=='chars'){ sendTo(pid,{type:'toast', text:'追加の行動では文字を1つだけ選べます'}); return; }
     let vals=[...new Set((data.vals||[]).map(String))];
     if(kind==='type') vals=vals.filter(v=>TYPES.includes(v) && !g.called.types.includes(v)).slice(0,1);
-    else vals=vals.filter(v=>TABLE_SET.has(v) && !g.called.chars.includes(v)).slice(0, g.turn.bonus?1:2);
+    else vals=vals.filter(v=>TABLE_SET.has(v) && !g.called.chars.includes(v)).slice(0, g.turn.bonus?1:2);   // 正解後のもう1回は文字1つ（またはタイプ1つ）
     if(!vals.length){ sendTo(pid,{type:'toast', text:'その回答は選べません。選び直してください'}); return; }
     applyAnswer(kind, vals);
   }
@@ -623,9 +632,9 @@ function playOrderAnim(){
     g.orderShown++; commit();
   }, 900);
 }
-/** bonus=true：正解したあとの追加の行動（文字1つだけ） */
+/** bonus=true：正解したあとの追加の行動（文字1つ か タイプ1つ）。制限時間は別設定 */
 function beginTurn(bonus){
-  const g=G(), sec=S().answerSec;
+  const g=G(), sec=bonus ? S().bonusSec : S().answerSec;
   g.turn={ id:uid(), pid:g.turnOrder[g.turnIdx], endsAt:Date.now()+sec*1000, durMs:sec*1000, bonus:!!bonus };
   g.lastResult=null;
   gs.phase='turn';
@@ -638,7 +647,7 @@ function startTurns(){
 /** 回答を反映：誰かのポケモンに含まれていればオープン。名前が3匹ともオープンされた人は負け */
 function applyAnswer(kind, vals){
   const g=G(), t=g.turn, pid=t.pid;
-  if(t.bonus){ kind='chars'; vals=vals.slice(0,1); }
+  if(t.bonus) vals=vals.slice(0,1);
   const wasOpen={};
   g.members.forEach(p=>{ wasOpen[p]=g.hands[p].final.map(pk=>nameOpen(pk.n, g.called.chars)); });
   if(kind==='type') g.called.types.push(...vals); else g.called.chars.push(...vals);
@@ -649,13 +658,14 @@ function applyAnswer(kind, vals){
   g.members.forEach(p=>g.hands[p].final.forEach((pk,i)=>{ if(!wasOpen[p][i] && nameOpen(pk.n, g.called.chars)) opened.push({owner:pname(p), n:pk.n}); }));
   const newOut=g.members.filter(p=>!g.out.includes(p) && g.hands[p].final.every(pk=>nameOpen(pk.n, g.called.chars)));
   g.out.push(...newOut);
-  // 正解＝ほかの人のポケモンに1つでも含まれていた → もう1回だけ文字を1つ選べる（追加の行動では続かない）
+  // 正解＝ほかの人のポケモンに1つでも含まれていた → もう1回だけ文字1つかタイプ1つを選べる（追加の行動では続かない）
   const correct=all.some(x=>x.p!==pid && vals.some(v=>pkHas(x.pk, kind, v)));
   g.lastResult={ pid, name:pname(pid), kind, vals, hits, flashes, opened, outNames:newOut.map(pname), skipped:false, wasBonus:!!t.bonus, correct, bonus:false };
   g.log.push({ name:pname(pid), kind, vals, bonus:!!t.bonus });
   g.turn=null;
   checkOver(newOut);
   g.lastResult.bonus = correct && !t.bonus && !g.over && !g.out.includes(pid);
+  g.revealEndsAt=Date.now()+S().revealSec*1000;
   gs.phase='reveal';
   commit();
 }
@@ -664,6 +674,7 @@ function skipTurn(reason){
   g.lastResult={ pid:t.pid, name:pname(t.pid), kind:null, vals:[], hits:[], flashes:[], opened:[], outNames:[], skipped:true, reason, wasBonus:!!t.bonus, bonus:false };
   g.log.push({ name:pname(t.pid), kind:null, vals:[] });
   g.turn=null;
+  g.revealEndsAt=Date.now()+S().revealSec*1000;
   gs.phase='reveal';
   commit();
 }
@@ -677,7 +688,7 @@ function checkOver(newOut){
 function nextTurn(){
   const g=G(); if(gs.phase!=='reveal') return;
   if(g.over){ finishGame(); return; }
-  if(g.lastResult && g.lastResult.bonus){ beginTurn(true); return; }   // 同じ人がもう1回（文字1つ）
+  if(g.lastResult && g.lastResult.bonus){ beginTurn(true); return; }   // 同じ人がもう1回（文字1つ か タイプ1つ）
   const n=g.turnOrder.length;
   for(let k=1;k<=n;k++){
     const idx=(g.turnIdx+k)%n;
@@ -720,6 +731,13 @@ function beep(){
 }
 function tickHost(){
   const g=gs && G(); if(!g) return;
+  // 結果を少し見せたら、ホストが押さなくても自動で次の番へ（ゲーム終了時だけは「結果発表」ボタン）
+  if(gs.phase==='reveal' && !g.over && g.revealEndsAt){
+    const rms=g.revealEndsAt-Date.now();
+    const rel=document.getElementById('reveal-count'); if(rel) rel.textContent=Math.max(1, Math.ceil(rms/1000));
+    if(rms<=0){ g.revealEndsAt=null; nextTurn(); }
+    return;
+  }
   let endsAt=null, id=null;
   if(gs.phase==='select'){ endsAt=g.selEndsAt; id='sel-'+g.id; }
   else if(gs.phase==='turn' && g.turn){ endsAt=g.turn.endsAt; id=g.turn.id; }
@@ -851,7 +869,7 @@ function turnBarHtml(g){
   if(gs.phase==='turn' && g.turn){
     const ms=Math.max(0, g.turn.endsAt-Date.now());
     right=`<div class="turn-now"><div class="who">${esc(pname(g.turn.pid))}<small> さんの番</small></div>
-      ${g.turn.bonus?'<div class="bonus-lbl">⭕ もう1回！（文字を1つだけ）</div>':''}
+      ${g.turn.bonus?'<div class="bonus-lbl">⭕ もう1回！（文字1つ か タイプ1つ）</div>':''}
       <div class="turn-timer timer ${ms<=0?'zero':''}" id="host-timer" style="font-size:54px;margin:4px 0">${Math.ceil(ms/1000)}<span class="unit" style="font-size:20px">秒</span></div>
       <button class="small ghost" data-act="skip">⏭ スキップ</button></div>`;
   }
@@ -868,10 +886,11 @@ function revealHtml(g){
     res=x.hits.map(h=>h.count?`<span class="hit">「${esc(h.v)}」ヒット！（${h.count}匹）</span>`:`<span class="miss">「${esc(h.v)}」は誰も持っていません</span>`).join('　');
     if(x.opened.length) res+=`<div>${x.opened.map(o=>`🎯 ${esc(o.owner)}さんの「${esc(o.n)}」が全部オープン！`).join('<br>')}</div>`;
     if(x.outNames.length) res+=`<div class="out">💥 ${x.outNames.map(esc).join('さん・')}さん 負け！</div>`;
-    if(x.bonus) res+=`<div class="bonus">⭕ 正解！ ${esc(x.name)}さんは、もう1回だけ文字を1つ選べます</div>`;
+    if(x.bonus) res+=`<div class="bonus">⭕ 正解！ ${esc(x.name)}さんは、もう1回だけ文字1つ か タイプ1つを選べます</div>`;
   }
   return `<div class="reveal"><div class="what">${what}</div><div class="res">${res}</div>
-    <button class="primary big" data-act="next" data-enter>${g.over?'🏆 結果発表 ▶':x.bonus?`▶ ${esc(x.name)}さん もう1回（文字1つ）`:'次の人へ ▶'}</button></div>`;
+    ${g.over ? '<button class="primary big" data-act="next" data-enter>🏆 結果発表 ▶</button>'
+      : `<div class="auto-next"><b id="reveal-count">${Math.max(1, Math.ceil(((g.revealEndsAt||Date.now())-Date.now())/1000))}</b>秒後に${x.bonus?`${esc(x.name)}さんのもう1回`:'次の人の番'}へ<br><button class="small" data-act="next">すぐ進む ▶</button></div>`}</div>`;
 }
 
 function renderHost(){
@@ -1083,7 +1102,7 @@ function renderSub(){
         <div class="p-center" style="padding:14px"><p>結果はホストの画面を見てください</p></div>${mine}`;
     }
     else if(s.phase==='turn' && s.turn && s.turn.isMe){
-      html=`${head}<div class="role-banner">${s.turn.bonus?'⭕ 正解！ もう1回（文字を1つ）':'🎤 あなたの番です'}</div><div class="p-timer" id="sub-timer"></div>
+      html=`${head}<div class="role-banner">${s.turn.bonus?'⭕ 正解！ もう1回（文字1つ か タイプ1つ）':'🎤 あなたの番です'}</div><div class="p-timer" id="sub-timer"></div>
         <div class="lbl muted" style="font-size:13px;font-weight:800;margin:4px 0">あなたのポケモン</div>${mine}${answerHtml(s)}`;
     }
     else {
@@ -1111,11 +1130,14 @@ function answerHtml(s){
   const vals=ansVals();
   if(subAns.sent) return `<div class="p-center" style="padding:16px"><div class="spinner"></div><h3>送信しました</h3><p>ホストの画面を見てください</p></div>`;
   if(s.turn.bonus){
-    // 正解したあとの追加の行動：文字を1つだけ（2つ目・タイプは選べない）
+    // 正解したあとの追加の行動：文字を1つ か タイプを1つ（2文字は選べない）
     return `<div class="ans-box">
-      <div class="lbl">文字を1つ選ぶ（タイプは選べません）</div>
+      <div class="lbl">文字を1つ選ぶ</div>
       <select id="a-c1">${opt(chars, subAns.c1, '', "文字を選ぶ")}</select>
-      <div class="ans-pick">${vals.length?`選択中：${vals.map(v=>`<span class="v">${esc(v)}</span>`).join('')}`:'<span class="muted">まだ選んでいません</span>'}</div>
+      <div class="ans-or">─ または ─</div>
+      <div class="lbl">タイプを選ぶ（1つ）</div>
+      <div class="tbtns">${types.map(t=>`<button data-sub="type" data-t="${esc(t)}" class="${subAns.type===t?'on':''}" style="background:${TYPE_COLORS[t]}">${esc(t)}</button>`).join('')}</div>
+      <div class="ans-pick">${vals.length?`選択中：${vals.map(v=>`<span class="v">${esc(v)}</span>`).join('')}${subAns.type?' タイプ':''}`:'<span class="muted">まだ選んでいません</span>'}</div>
       <div class="bottom-btns"><button class="primary" data-sub="ans-submit" ${vals.length?'':'disabled'}>決定</button></div>
       <p class="muted" style="font-size:12px;text-align:center;margin:6px 0 0">決定を押さずに時間切れになると、何も選ばずに次の人へ移ります</p>
     </div>`;
@@ -1132,7 +1154,7 @@ function answerHtml(s){
     </div>`;
 }
 function ansVals(){
-  if(sub && sub.turn && sub.turn.bonus) return subAns.c1 ? [subAns.c1] : [];
+  if(sub && sub.turn && sub.turn.bonus) return subAns.type ? [subAns.type] : subAns.c1 ? [subAns.c1] : [];
   return subAns.type ? [subAns.type] : [...new Set([subAns.c1, subAns.c2].filter(Boolean))];
 }
 function onSubChange(e){
@@ -1231,16 +1253,22 @@ function renderSettings(){
     <div class="set-grid">
       <div class="lbl">ポケモンを選ぶ制限時間</div><div class="row"><input type="number" id="s-select" value="${s.selectSec}" min="1"> 秒
         <span class="muted" style="font-size:13px">（6匹から3匹を選ぶ時間。時間切れは選んでいる分はそのまま・足りない分をランダム）</span></div>
-      <div class="lbl">回答の制限時間</div><div class="row"><input type="number" id="s-answer" value="${s.answerSec}" min="1"> 秒
+      <div class="lbl">回答の制限時間（1回目）</div><div class="row"><input type="number" id="s-answer" value="${s.answerSec}" min="1"> 秒
         <span class="muted" style="font-size:13px">（1人の番の時間。時間切れは何も選ばずに次の人へ）</span></div>
+      <div class="lbl">回答の制限時間（正解後の2回目）</div><div class="row"><input type="number" id="s-bonus" value="${s.bonusSec}" min="1"> 秒
+        <span class="muted" style="font-size:13px">（正解したあとの、文字1つかタイプ1つを選ぶ時間）</span></div>
+      <div class="lbl">結果を表示する時間</div><div class="row"><input type="number" id="s-reveal" value="${s.revealSec}" min="1"> 秒
+        <span class="muted" style="font-size:13px">（回答の結果をホスト画面に出してから、自動で次の番へ進むまでの時間）</span></div>
     </div>`;
 }
 function readSettings(){
   const v=id=>toInt(document.getElementById(id).value);
-  const s={ selectSec:v('s-select'), answerSec:v('s-answer') };
+  const s={ selectSec:v('s-select'), answerSec:v('s-answer'), bonusSec:v('s-bonus'), revealSec:v('s-reveal') };
   const errors=[];
   if(isNaN(s.selectSec)||s.selectSec<1) errors.push('ポケモンを選ぶ制限時間は1以上の整数で入力してください');
-  if(isNaN(s.answerSec)||s.answerSec<1) errors.push('回答の制限時間は1以上の整数で入力してください');
+  if(isNaN(s.answerSec)||s.answerSec<1) errors.push('回答の制限時間（1回目）は1以上の整数で入力してください');
+  if(isNaN(s.bonusSec)||s.bonusSec<1) errors.push('回答の制限時間（正解後の2回目）は1以上の整数で入力してください');
+  if(isNaN(s.revealSec)||s.revealSec<1) errors.push('結果を表示する時間は1以上の整数で入力してください');
   return {s, errors};
 }
 async function saveAdmin(go){
