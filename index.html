@@ -96,13 +96,11 @@ h1,h2,h3{margin:0 0 12px}
 .kc{aspect-ratio:1/1;display:flex;align-items:center;justify-content:center;background:#f4f1e4;color:#1d1d1f;border-radius:5px;font-size:22px;font-weight:900;position:relative}
 .kc.blank{background:transparent}
 .kc.called{background:#2a3146;color:#59627a}
-.kc.called.hit{background:#4a2f1e;color:#ffb27a}
 .kc.just{outline:3px solid var(--hit);animation:blink 1s ease-in-out 3}
 @keyframes blink{50%{outline-color:transparent}}
 .tgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:4px;width:250px;background:var(--panel);border-radius:12px;padding:8px}
 .tc{border-radius:6px;padding:5px 4px;text-align:center;font-size:16px;font-weight:900;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.5)}
 .tc.called{background:#2a3146 !important;color:#59627a;text-shadow:none}
-.tc.called.hit{color:#ffb27a}
 .tc.just{outline:3px solid var(--hit);animation:blink 1s ease-in-out 3}
 .players{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:12px}
 .pbox{background:var(--panel);border-radius:14px;padding:10px 12px;border:3px solid transparent}
@@ -796,14 +794,9 @@ function hostTopbar(){
 }
 
 /* ----- 盤面（文字表・タイプ一覧・各参加者のポケモン） ----- */
-function charStat(g, c){
-  if(!g.called.chars.includes(c)) return '';
-  return g.members.some(p=>g.hands[p].final.some(pk=>pk.n.includes(c))) ? 'called hit' : 'called';
-}
-function typeStat(g, t){
-  if(!g.called.types.includes(t)) return '';
-  return g.members.some(p=>g.hands[p].final.some(pk=>pk.t.includes(t))) ? 'called hit' : 'called';
-}
+/* 使われた文字・タイプは、当たり外れに関係なくすべてグレーアウト */
+function charStat(g, c){ return g.called.chars.includes(c) ? 'called' : ''; }
+function typeStat(g, t){ return g.called.types.includes(t) ? 'called' : ''; }
 function kanaTableHtml(g, just){
   const cells=[];
   for(let r=0;r<5;r++){
