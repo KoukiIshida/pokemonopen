@@ -192,7 +192,11 @@ body.sub .page{max-width:520px;padding:10px}
 .iimg.q{background:#3a4560;color:#c9d2e8;border-radius:8px;font-weight:900}
 .ibadge{display:inline-flex;align-items:center;gap:6px;background:#3a4560;color:#c9d2e8;border-radius:8px;padding:2px 10px 2px 3px;font-size:14px;font-weight:800}
 .ibadge .iimg.q{background:#2a3146}
-.ibadge.on{background:#ffd43b;color:#1a1a1a}
+.ibadge.on{background:#ffd43b;color:#1a1a1a;position:relative;cursor:pointer}
+.ibadge .itip{display:none;position:absolute;right:0;bottom:calc(100% + 8px);width:320px;z-index:40;background:#fff;color:#1d1d1f;border-radius:10px;padding:8px 12px;font-size:15px;font-weight:600;line-height:1.5;box-shadow:0 6px 20px rgba(0,0,0,.45);text-align:left;white-space:normal}
+.ibadge .itip b{display:block;font-size:16px;color:#b8860b;margin-bottom:2px}
+.ibadge .itip::after{content:"";position:absolute;right:24px;top:100%;border:8px solid transparent;border-top-color:#fff}
+.ibadge.on:hover .itip,.ibadge.show-tip .itip{display:block}
 .tag.endure{background:#9775fa;color:#fff}
 .reveal .iev{font-size:19px;color:#1d1d1f;margin-top:4px;animation:pop .3s ease-out}
 .reveal .iev.out{color:#c92a2a;font-size:22px}
@@ -200,6 +204,8 @@ body.sub .page{max-width:520px;padding:10px}
 .mypk .m .rd,.deal .d .rd{font-size:12px;color:var(--muted)}
 .sitem{background:var(--panel);border:1px solid #6b5520;border-radius:10px;padding:8px 10px;margin:-4px 0 10px;font-size:13px;line-height:1.5}
 .sitem b{color:var(--accent);font-size:15px}
+.idesc-row{display:flex;gap:10px;align-items:flex-start;margin-bottom:10px}
+.idesc-row textarea{margin-top:4px;font-size:14px;line-height:1.5}
 .sitem.has-img{display:flex;gap:10px;align-items:flex-start}
 .sitem.none{border-color:#33415f;color:var(--muted)}
 .ditem{margin-top:6px;font-size:13px;font-weight:800;color:var(--accent)}
@@ -397,17 +403,19 @@ function parseAnswerText(str, max, called, allowed){
 
 /* ---------- 道具（3匹から1匹モードで「道具あり」のとき） ---------- */
 /* 強い順。説明の数字（確率）は管理ページの設定で変わる */
+/* 強い順。desc は初期の説明文（管理ページで書き換えられる）。{確率} はその道具の確率（管理ページの設定）に置き換わる */
+const ITEM_PCT = { hikari:'pHikari', kiai:'pKiai', bakuhatsu:'pBaku', koukaku:'pKoukaku', tsume:'pTsume', focus:'pFocus' };
 const ITEMS = {
-  inochi:  { name:'いのちのたま',     desc:s=>'文字を3つまで選べる。そのかわり、自分のターンの最後（時間切れで何も選ばなかったときも）に、自分のポケモンの文字が1種類ランダムで開く。正解したあとのもう1回は1文字で、このときは開かない。ターンがパスになったときも開かない。' },
-  megane:  { name:'みとおしメガネ',   desc:s=>'ほかの人のポケモンの名前が何文字かが、自分のスマホに表示される。' },
-  gotsu:   { name:'ゴツゴツメット',   desc:s=>'ほかの人の回答で自分の文字が開いたとき、開いていないマスの数が回答した人より少なければ、回答した人の文字が1種類ランダムで開く（自分のポケモンにある文字は選ばれない）。' },
-  hikari:  { name:'ひかりのこな',     desc:s=>`ほかの人のターンが始まるとき、${s.pHikari}%の確率でそのターンがパスになる。` },
-  kiai:    { name:'きあいのハチマキ', desc:s=>`負けになるとき（道具のせいでも）、${s.pKiai}%の確率で、全員が1回ずつターンを終えるまで耐える。その間も自分のターンでは回答できる。耐えている間に相手が全員負けたら勝ち。` },
-  bakuhatsu:{ name:'ばくはつハチマキ', desc:s=>`ほかの人の回答で自分の文字が開いたとき、${s.pBaku}%の確率で、ほかの人全員の文字が1種類ずつランダムで開く（自分のポケモンにある文字は選ばれない）。` },
-  koukaku: { name:'こうかくレンズ',   desc:s=>`自分のターンの始まりに${s.pKoukaku}%の確率で、ほかの人（負けた人は除く）の文字が1種類ランダムで開く（自分のポケモンにある文字は選ばれない）。これがこのターンの回答になり、もう1回はない。` },
-  tsume:   { name:'せんせいのツメ',   desc:s=>`回答順を決めるとき、1番になる確率が${s.pTsume}%上がる。` },
-  herb:    { name:'メンタルハーブ',   desc:s=>'道具の効果で自分の文字が開きそうになったとき（自分が狙われたときも、ほかの人と同じ文字で巻き込まれるときも）、何回でも防ぐ。その効果は取り消しになり、誰の文字も開かない。' },
-  focus:   { name:'フォーカスレンズ', desc:s=>`最初の回答順で一番最後になったとき、自分のターンのたびに${s.pFocus}%の確率で文字を2つ選べる。` }
+  inochi:  { name:'いのちのたま',     desc:'文字を3つまで選べる。そのかわり、自分のターンの最後（時間切れで何も選ばなかったときも）に、自分のポケモンの文字が1種類ランダムで開く。正解したあとのもう1回は1文字で、このときは開かない。ターンがパスになったときも開かない。' },
+  megane:  { name:'みとおしメガネ',   desc:'ほかの人のポケモンの名前が何文字かが、自分のスマホに表示される。' },
+  gotsu:   { name:'ゴツゴツメット',   desc:'ほかの人の回答で自分の文字が開いたとき、開いていないマスの数が回答した人より少なければ、回答した人の文字が1種類ランダムで開く（自分のポケモンにある文字は選ばれない）。' },
+  hikari:  { name:'ひかりのこな',     desc:'ほかの人のターンが始まるとき、{確率}%の確率でそのターンがパスになる。' },
+  kiai:    { name:'きあいのハチマキ', desc:'負けになるとき（道具のせいでも）、{確率}%の確率で、全員が1回ずつターンを終えるまで耐える。その間も自分のターンでは回答できる。耐えている間に相手が全員負けたら勝ち。' },
+  bakuhatsu:{ name:'ばくはつハチマキ', desc:'ほかの人の回答で自分の文字が開いたとき、{確率}%の確率で、ほかの人全員の文字が1種類ずつランダムで開く（自分のポケモンにある文字は選ばれない）。' },
+  koukaku: { name:'こうかくレンズ',   desc:'自分のターンの始まりに{確率}%の確率で、ほかの人（負けた人は除く）の文字が1種類ランダムで開く（自分のポケモンにある文字は選ばれない）。これがこのターンの回答になり、もう1回はない。' },
+  tsume:   { name:'せんせいのツメ',   desc:'回答順を決めるとき、1番になる確率が{確率}%上がる。' },
+  herb:    { name:'メンタルハーブ',   desc:'道具の効果で自分の文字が開きそうになったとき（自分が狙われたときも、ほかの人と同じ文字で巻き込まれるときも）、何回でも防ぐ。その効果は取り消しになり、誰の文字も開かない。' },
+  focus:   { name:'フォーカスレンズ', desc:'最初の回答順で一番最後になったとき、自分のターンのたびに{確率}%の確率で文字を2つ選べる。' }
 };
 const ITEM_KEYS = Object.keys(ITEMS);
 /* 道具の画像（items フォルダの画像を埋め込み。表示はすべて同じ大きさの枠にそろえる） */
@@ -427,7 +435,13 @@ const ITEM_IMG = {
 function itemImg(k, size){ const z=size||40; return k && ITEM_IMG[k] ? `<img class="iimg" src="${ITEM_IMG[k]}" alt="" style="width:${z}px;height:${z}px">` : `<span class="iimg q" style="width:${z}px;height:${z}px;font-size:${Math.round(z*0.6)}px">？</span>`; }
 const ITEM_NOTE = '道具の効果で開いた文字では、ほかの道具は発動しません。道具の効果で開いても、正解後のもう1回はありません。';
 function itemName(k){ return ITEMS[k] ? ITEMS[k].name : ''; }
-function itemDesc(k, s, kind){ const t=ITEMS[k] ? ITEMS[k].desc(s||appData.settings) : ''; return kind==='yoji' ? t.replace(/ポケモンの名前/g,'四字熟語の読み').replace(/ポケモン/g,'四字熟語') : t; }
+/** 説明文のもと（管理ページで書き換えたものがあればそれ） */
+function itemDescTemplate(k){ const c=appData.itemDescs && appData.itemDescs[k]; return (c && c.trim()) ? c.trim() : (ITEMS[k] ? ITEMS[k].desc : ''); }
+function itemDesc(k, s, kind){
+  s=s||appData.settings;
+  const t=itemDescTemplate(k).replace(/\{確率\}/g, ITEM_PCT[k] ? String(s[ITEM_PCT[k]]) : '');
+  return kind==='yoji' ? t.replace(/ポケモンの名前/g,'四字熟語の読み').replace(/ポケモン/g,'四字熟語') : t;
+}
 /** 道具一覧（ポップアップ用） */
 function itemListHtml(s, kind){
   return `<div class="item-list">${ITEM_KEYS.map((k,i)=>`<div class="it">${itemImg(k,44)}<div><b>${i+1}. ${esc(itemName(k))}</b><div>${esc(itemDesc(k, s, kind))}</div></div></div>`).join('')}</div>
@@ -486,6 +500,7 @@ function mergeAppData(d){
   m.ruleSlides.forEach(s=>{ if(!Array.isArray(s.groups)||!s.groups.length) s.groups=['']; if(s.img===undefined) s.img=null; });
   m.settings=normalizeSettings(m.settings);
   if(typeof m.memo!=='string') m.memo='';
+  if(!m.itemDescs || typeof m.itemDescs!=='object') m.itemDescs={};
   return m;
 }
 
@@ -1158,6 +1173,7 @@ function onHostClick(e){
   else if(act==='honban-now') startHonbanNow();
   else if(act==='next-game'){ loadAppData().then(()=>{ gs.settings=JSON.parse(JSON.stringify(appData.settings)); dealGame(b.dataset.practice==='1'); }); }
   else if(act==='to-lobby'){ gs.game=null; gs.phase='lobby'; commit(); }
+  else if(act==='item-tip'){ const k=b.dataset.item; openModal(`<div style="display:flex;gap:12px;align-items:center">${itemImg(k,64)}<h3 style="margin:0">${esc(itemName(k))}</h3></div><p style="font-size:17px;line-height:1.6">${esc(itemDesc(k, S(), G()?G().wordSet:'poke'))}</p>`); }
   else if(act==='item-list'){ loadAppData().then(()=>openModal(`<h3>道具一覧（強い順）</h3>${itemListHtml(appData.settings, gs.opt.set)}`)); }
   else if(act==='gens-all'){ gs.opt.gens=allGens(); lsSet(LS.opt, gs.opt); saveState(); renderHost(); }
 }
@@ -1215,7 +1231,10 @@ function itemBadge(g, p){
   const r=g.lastResult, pending = gs.phase==='reveal' && r ? r.events.slice(shownEvents(g)).some(e=>(e.reveals||[]).includes(p)) : false;
   const k=itemOf(g,p), h=g.hands[p], show=gs.phase==='end' || (h.revealed && !pending);
   if(!show) return `<span class="ibadge">${itemImg(null,34)}道具：？</span>`;
-  return k ? `<span class="ibadge on">${itemImg(k,34)}${esc(itemName(k))}</span>` : '<span class="ibadge">道具：なし</span>';
+  if(!k) return '<span class="ibadge">道具：なし</span>';
+  // 効果は吹き出しで重ねて出す（枠の大きさは変えない）。この結果で公開された道具は自動で出す。ほかはマウスを乗せる／クリックで出す
+  const justNow = gs.phase==='reveal' && r && r.events.slice(0, shownEvents(g)).some(e=>(e.reveals||[]).includes(p));
+  return `<span class="ibadge on ${justNow?'show-tip':''}" data-act="item-tip" data-item="${k}">${itemImg(k,34)}${esc(itemName(k))}<span class="itip"><b>${esc(itemName(k))}</b>${esc(itemDesc(k, S(), g.wordSet))}</span></span>`;
 }
 function playersHtml(g, showAll){
   const just = g.lastResult && gs.phase==='reveal' ? g.lastResult.vals.concat(g.lastResult.events.slice(0, shownEvents(g)).flatMap(e=>e.letters)) : [];
@@ -1699,7 +1718,11 @@ function renderSettings(){
         <span class="muted" style="font-size:13px">（1番になる確率に足す）</span></div>
       <div class="lbl">フォーカスレンズ</div><div class="row"><input type="number" id="s-pFocus" value="${s.pFocus}" min="0" max="100"> %</div>
     </div>
-    <details style="margin-top:12px"><summary class="muted">道具の一覧と効果（保存した数字で表示）</summary>${itemListHtml(s, 'poke')}</details>`;
+    <h3 style="margin-top:18px">道具の説明文</h3>
+    <p class="muted" style="font-size:13px;margin-top:-6px">ゲーム中（スマホ・ホスト画面・道具一覧）に出る説明です。<b>{確率}</b> と書くと、上で設定した確率の数字に置き換わります。空にして保存すると初期の説明に戻ります。四字熟語のときは「ポケモン」が自動で「四字熟語」になります。</p>
+    <div id="item-desc-edit">${ITEM_KEYS.map(k=>`<div class="idesc-row">${itemImg(k,40)}<div style="flex:1"><div class="row" style="gap:6px"><b>${esc(itemName(k))}</b>${ITEM_PCT[k]?'<span class="muted" style="font-size:12px">（{確率} が使えます）</span>':''}<span class="spacer"></span><button type="button" class="small ghost" data-act="idesc-reset" data-k="${k}">初期の説明に戻す</button></div>
+      <textarea class="idesc" data-k="${k}" rows="2">${esc(itemDescTemplate(k))}</textarea></div></div>`).join('')}</div>
+    <details style="margin-top:12px"><summary class="muted">道具の一覧と効果（保存した内容で表示）</summary>${itemListHtml(s, 'poke')}</details>`;
 }
 function readSettings(){
   const v=id=>toInt(document.getElementById(id).value);
@@ -1723,6 +1746,9 @@ async function saveAdmin(go){
   });
   appData.settings=normalizeSettings(s);
   appData.memo=document.getElementById('memo').value;
+  // 道具の説明文：初期と同じ・空なら保存しない（初期の説明を使う）
+  appData.itemDescs={};
+  document.querySelectorAll('.idesc').forEach(t=>{ const k=t.dataset.k, v=t.value.trim(); if(v && ITEMS[k] && v!==ITEMS[k].desc) appData.itemDescs[k]=v; });
   const ov=document.getElementById('save-overlay'), bar=document.getElementById('save-bar'), pct=document.getElementById('save-pct'), msg=document.getElementById('save-msg');
   const prog=(p,m)=>{ bar.style.width=p+'%'; pct.textContent=Math.round(p)+'%'; if(m) msg.textContent=m; };
   ov.classList.add('active'); prog(10,'保存中…');
@@ -1956,6 +1982,7 @@ function onAdminClick(e){
   if(act==='tohost') location.href=location.pathname;
   else if(act==='save') saveAdmin(false);
   else if(act==='save-go') saveAdmin(true);
+  else if(act==='idesc-reset'){ const t=document.querySelector(`.idesc[data-k="${b.dataset.k}"]`); if(t) t.value=ITEMS[b.dataset.k].desc; showToast('初期の説明に戻しました（保存ボタンで反映）'); }
   else if(act==='delhist'){
     if(!confirm('この履歴を削除しますか？\n（このゲームで配ったポケモンは「未使用」に戻ります）')) return;
     const all=getHistory();
