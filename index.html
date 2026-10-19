@@ -204,6 +204,7 @@ body.sub .page{max-width:520px;padding:10px}
 .mypk .m .rd,.deal .d .rd{font-size:12px;color:var(--muted)}
 .sitem{background:var(--panel);border:1px solid #6b5520;border-radius:10px;padding:8px 10px;margin:-4px 0 10px;font-size:13px;line-height:1.5}
 .sitem b{color:var(--accent);font-size:15px}
+.item-list .iopen{font-size:12px;color:#7a5c00;margin-top:3px}
 .idesc-row{display:flex;gap:10px;align-items:flex-start;margin-bottom:10px}
 .idesc-row textarea{margin-top:4px;font-size:14px;line-height:1.5}
 .sitem.has-img{display:flex;gap:10px;align-items:flex-start}
@@ -418,6 +419,14 @@ const ITEMS = {
   focus:   { name:'フォーカスレンズ', desc:'最初の回答順で一番最後になったとき、自分のターンのたびに{確率}%の確率で文字を2つ選べる。' }
 };
 const ITEM_KEYS = Object.keys(ITEMS);
+/* ほかの人に道具が公開される（「？」から変わる）タイミング */
+const ITEM_OPEN = {
+  inochi:'自分の最初のターンが始まったとき', megane:'ゲーム開始時（回答順の発表）', gotsu:'効果が出たとき',
+  hikari:'効果が出たとき（だれかのターンをパスにしたとき）', kiai:'耐えたとき（確率に外れたら公開されない）',
+  bakuhatsu:'効果が出たとき', koukaku:'効果が出たとき', tsume:'持ち主が1番になったとき',
+  herb:'文字を守ったとき', focus:'文字を2つ選べるようになったとき'
+};
+const ITEM_OPEN_NOTE = '効果がメンタルハーブで取り消されても、発動した道具は公開されます。道具を持っていない人も「？」のままです。ゲームが終わると全員の道具が公開されます。';
 /* 道具の画像（items フォルダの画像を埋め込み。表示はすべて同じ大きさの枠にそろえる） */
 const ITEM_IMG = {
   inochi:'data:image/png;base64,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',
@@ -444,8 +453,8 @@ function itemDesc(k, s, kind){
 }
 /** 道具一覧（ポップアップ用） */
 function itemListHtml(s, kind){
-  return `<div class="item-list">${ITEM_KEYS.map((k,i)=>`<div class="it">${itemImg(k,44)}<div><b>${i+1}. ${esc(itemName(k))}</b><div>${esc(itemDesc(k, s, kind))}</div></div></div>`).join('')}</div>
-    <p class="muted" style="font-size:12px;color:#666;margin-top:8px">※${esc(ITEM_NOTE)}</p>`;
+  return `<div class="item-list">${ITEM_KEYS.map((k,i)=>`<div class="it">${itemImg(k,44)}<div><b>${i+1}. ${esc(itemName(k))}</b><div>${esc(itemDesc(k, s, kind))}</div><div class="iopen">公開：${esc(ITEM_OPEN[k])}</div></div></div>`).join('')}</div>
+    <p class="muted" style="font-size:12px;color:#666;margin-top:8px">※${esc(ITEM_NOTE)}<br>※${esc(ITEM_OPEN_NOTE)}</p>`;
 }
 
 /* ---------- 設定 ---------- */
@@ -836,9 +845,12 @@ function decideOrder(g){
   let x=Math.random()*w.reduce((a,b)=>a+b,0), first=ms[n-1];
   for(let i=0;i<n;i++){ x-=w[i]; if(x<0){ first=ms[i]; break; } }
   const order=[first].concat(shuffle(ms.filter(p=>p!==first)));
-  if(itemOf(g, first)==='tsume') g.hands[first].revealed=true;   // ツメ：持ち主が1番になったときだけ公開
+  if(itemOf(g, first)==='tsume') revealNow(g, first);   // ツメ：持ち主が1番になったときだけ公開
   g.focusLast=order[order.length-1];
-  if(g.items) g.orderNote = itemOf(g, first)==='tsume' ? `✨ ${pname(first)}さんの「せんせいのツメ」！` : '';
+  const meganes=ms.filter(p=>itemOf(g,p)==='megane');   // みとおしメガネ：ゲーム開始時に公開
+  meganes.forEach(p=>revealNow(g,p));
+  if(g.items) g.orderNote = [itemOf(g, first)==='tsume' ? `✨ ${pname(first)}さんの「せんせいのツメ」！` : '',
+    meganes.length ? `👓 ${meganes.map(pname).join('さん・')}さんは「みとおしメガネ」を持っています` : ''].filter(Boolean).join('　');
   return order;
 }
 function playOrderAnim(){
@@ -867,6 +879,8 @@ function pickOne(a){ return a.length ? a[Math.floor(Math.random()*a.length)] : n
 function roll(pct){ return Math.random()*100 < pct; }
 /** 道具を公開する。ホスト画面では、その効果の表示が出たときに「？」から道具名に変わる */
 function reveal(g, p){ if(g.hands[p].revealed) return; g.hands[p].revealed=true; (g.revealQueue=g.revealQueue||[]).push(p); }
+/** 効果の表示（結果）を待たずに、すぐ公開する（回答順の発表・ターン開始のときの公開） */
+function revealNow(g, p){ g.hands[p].revealed=true; }
 /** 文字を開く（道具で開いても回答で開いても、文字表もグレーになり全員のポケモンで開く） */
 function openLetter(g, c){ if(c && !g.called.chars.includes(c)) g.called.chars.push(c); }
 function ev(events, text, letters, cls){ const g=G(); events.push({ text, letters:letters||[], cls:cls||'', reveals:(g && g.revealQueue||[]).splice(0) }); }
@@ -999,6 +1013,7 @@ function turnStartItems(g, pid){
     endOfTurn(g, pid, events); toReveal(g); return true;
   }
   g.turnNotes=[];
+  if(itemOf(g,pid)==='inochi') revealNow(g, pid);   // いのちのたま：自分の最初のターンが始まったら公開（このターンから文字3つまで）
   // こうかくレンズ：ほかの人（負けた人は除く）を1人選び、その人の文字を1種類開く。これがこのターンの回答（もう1回なし）
   if(itemOf(g,pid)==='koukaku' && roll(S().pKoukaku)){
     reveal(g, pid);
@@ -1014,7 +1029,7 @@ function turnStartItems(g, pid){
   }
   // フォーカスレンズ：最初の回答順で一番最後の人だけ。発動したらこのターンは文字2つ
   if(itemOf(g,pid)==='focus' && g.focusLast===pid && gMaxChars(g)<2 && roll(S().pFocus)){
-    reveal(g, pid); g.turn.focus=true;
+    revealNow(g, pid); g.turn.focus=true;
     g.turnNotes.push(`🔍 ${pname(pid)}さんの「フォーカスレンズ」！ このターンは文字を2つまで選べる`);
   }
   return false;
@@ -1260,6 +1275,7 @@ function turnBarHtml(g){
     const ms=Math.max(0, g.turn.endsAt-Date.now()), mx=turnMax(g);
     right=`<div class="turn-now"><div class="who">${esc(pname(g.turn.pid))}<small> さんの番</small></div>
       ${g.turn.bonus?'<div class="bonus-lbl">⭕ もう1回！（文字1つ）</div>':''}
+      ${!g.turn.bonus && itemOf(g, g.turn.pid)==='inochi'?'<div class="bonus-lbl" style="background:#f3a6d0">🔴 いのちのたま：文字3つまで</div>':''}
       ${(g.turnNotes||[]).map(t=>`<div class="bonus-lbl" style="background:#ffd8a8">${esc(t)}</div>`).join('')}
       <div class="turn-timer timer ${ms<=0?'zero':''}" id="host-timer" style="font-size:54px;margin:4px 0">${Math.ceil(ms/1000)}<span class="unit" style="font-size:20px">秒</span></div>
       <button class="small ghost" data-act="skip">⏭ スキップ</button></div>`;
@@ -1357,7 +1373,7 @@ function renderHost(){
     const done=g.orderShown>=g.turnOrder.length;
     body=`<div class="stage">
       <h2>回答順の発表！</h2>
-      ${done && g.orderNote?`<p style="font-size:22px;font-weight:900;color:var(--accent)">${esc(g.orderNote)}</p>`:''}
+      ${done && g.orderNote?`<p style="font-size:22px;font-weight:900;color:var(--accent)">${g.orderNote.split('　').map(esc).join('<br>')}</p>`:''}
       <div class="order-list">${g.turnOrder.slice(0,g.orderShown).map((p,i)=>`<div class="order-item"><span class="no">${i+1}番</span>${esc(pname(p))} さん</div>`).join('')}</div>
       ${done?`<div class="btnbar"><button class="primary big" data-act="turns" data-enter>▶ ${esc(pname(g.turnOrder[0]))}さんから回答スタート（${s.answerSec}秒）</button></div>`:'<div class="spinner"></div>'}
     </div>`;
@@ -1479,7 +1495,7 @@ function subItemHtml(k, s){
   if(!s || !s.items) return '';
   if(!k) return '<div class="sitem none">道具：なし</div>';
   const inf=(s.itemInfo||{})[k]||{name:k, desc:''};
-  return `<div class="sitem has-img">${itemImg(k,52)}<div><b>道具：${esc(inf.name)}</b><div>${esc(inf.desc)}</div></div></div>`;
+  return `<div class="sitem has-img">${itemImg(k,52)}<div><b>道具：${esc(inf.name)}</b><div>${esc(inf.desc)}</div><div class="muted" style="font-size:11px;margin-top:2px">ほかの人に公開されるのは：${esc(ITEM_OPEN[k]||'')}</div></div></div>`;
 }
 function pkNameHtml(pk){ return `<div class="nm">${esc(pk.d||pk.n)}</div>${pk.d&&pk.d!==pk.n?`<div class="rd">${esc(pk.n)}</div>`:''}`; }
 /** 自分のポケモン。名前が全部オープンされたものは暗くして「オープン済」。道具ありなら道具と効果も出す */
