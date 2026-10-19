@@ -408,7 +408,7 @@ function parseAnswerText(str, max, called, allowed){
    {最後確率} はフォーカスレンズの「一番最後になる確率」、{文字数} はいのちのたまで選べる文字数（ゲーム前は「参加人数＋1」、ゲーム中は実際の数）に置き換わる */
 const ITEM_PCT = { hikari:'pHikari', kiai:'pKiai', bakuhatsu:'pBaku', koukaku:'pKoukaku', tsume:'pTsume', focus:'pFocus' };
 const ITEMS = {
-  inochi:  { name:'いのちのたま',     desc:'文字を{文字数}つまで選べる。そのかわり、自分のターンの最後（時間切れで何も選ばなかったときも）に、自分のポケモンの文字が1種類ランダムで開く。正解したあとのもう1回は1文字で、このときは開かない。ターンがパスになったときも開かない。' },
+  inochi:  { name:'いのちのたま',     desc:'文字を{文字数}つまで選べる（正解したあとのもう1回は1文字）。そのかわり、自分のターンが終わったとき（正解してもう1回選んだときはそのあと。時間切れで何も選ばなかったときも）に、自分のポケモンの文字が1種類ランダムで開く。ターンがパスになったときは開かない。' },
   megane:  { name:'みとおしメガネ',   desc:'ほかの人のポケモンの名前が何文字かが、自分のスマホに表示される。' },
   gotsu:   { name:'ゴツゴツメット',   desc:'ほかの人の回答で自分の文字が開いたとき、開いていないマスの数が回答した人より少なければ、回答した人の文字が1種類ランダムで開く（自分のポケモンにある文字は選ばれない）。' },
   hikari:  { name:'ひかりのこな',     desc:'ほかの人のターンが始まるとき、{確率}%の確率でそのターンがパスになる。' },
@@ -422,7 +422,7 @@ const ITEMS = {
 const ITEM_KEYS = Object.keys(ITEMS);
 /* ほかの人に道具が公開される（「？」から変わる）タイミング */
 const ITEM_OPEN = {
-  inochi:'自分の最初のターンが始まったとき', megane:'ゲーム開始時（回答順の発表）', gotsu:'効果が出たとき',
+  inochi:'自分のターンが終わって、反動で文字が開いたとき', megane:'ゲーム開始時（回答順の発表）', gotsu:'効果が出たとき',
   hikari:'効果が出たとき（だれかのターンをパスにしたとき）', kiai:'耐えたとき（確率に外れたら公開されない）',
   bakuhatsu:'効果が出たとき', koukaku:'効果が出たとき', tsume:'持ち主が1番になったとき',
   herb:'文字を守ったとき', focus:'文字を2つ選べるようになったとき'
@@ -1021,7 +1021,7 @@ function turnStartItems(g, pid){
     endOfTurn(g, pid, events); toReveal(g); return true;
   }
   g.turnNotes=[];
-  if(itemOf(g,pid)==='inochi') revealNow(g, pid);   // いのちのたま：自分の最初のターンが始まったら公開（このターンから文字「参加人数＋1」つまで）
+  // いのちのたま：公開はターンが終わって反動が出たとき（inochiSelfOpen）
   // こうかくレンズ：ほかの人（負けた人は除く）を1人選び、その人の文字を1種類開く。これがこのターンの回答（もう1回なし）
   if(itemOf(g,pid)==='koukaku' && roll(S().pKoukaku)){
     reveal(g, pid);
@@ -1077,8 +1077,8 @@ function applyAnswer(vals){
   checkOver(newOut);
   g.lastResult=newResult(g, pid, { kind:'chars', vals, hits, flashes, opened, outNames:newOut.map(pname), wasBonus:!!t.bonus, correct, events });
   g.log.push({ name:pname(pid), vals, bonus:!!t.bonus });
-  if(!t.bonus) inochiSelfOpen(g, pid, events);   // 回答のあとに自分の文字が開く（もう1回のときは開かない）
   g.lastResult.bonus = correct && !t.bonus && !g.over && !isOut(g,pid);
+  if(!g.lastResult.bonus) inochiSelfOpen(g, pid, events);   // ターンが終わったら自分の文字が開く（正解したら、もう1回のあと）
   if(!g.lastResult.bonus && !g.over) endOfTurn(g, pid, events);
   toReveal(g);
 }
@@ -1088,7 +1088,7 @@ function skipTurn(reason){
   (g.turnNotes||[]).forEach(t2=>ev(events, t2));
   g.lastResult=newResult(g, t.pid, { skipped:true, reason, wasBonus:!!t.bonus, events });
   g.log.push({ name:pname(t.pid), vals:[] });
-  if(!t.bonus) inochiSelfOpen(g, t.pid, events);   // 時間切れで何も選ばなくても開く
+  inochiSelfOpen(g, t.pid, events);   // 時間切れで何も選ばなくてもターンが終わったら開く（もう1回の時間切れも）
   if(!g.over) endOfTurn(g, t.pid, events);
   toReveal(g);
 }
@@ -1283,7 +1283,6 @@ function turnBarHtml(g){
     const ms=Math.max(0, g.turn.endsAt-Date.now()), mx=turnMax(g);
     right=`<div class="turn-now"><div class="who">${esc(pname(g.turn.pid))}<small> さんの番</small></div>
       ${g.turn.bonus?'<div class="bonus-lbl">⭕ もう1回！（文字1つ）</div>':''}
-      ${!g.turn.bonus && itemOf(g, g.turn.pid)==='inochi'?`<div class="bonus-lbl" style="background:#f3a6d0">🔴 いのちのたま：文字${inochiMax(g.members.length)}つまで</div>`:''}
       ${(g.turnNotes||[]).map(t=>`<div class="bonus-lbl" style="background:#ffd8a8">${esc(t)}</div>`).join('')}
       <div class="turn-timer timer ${ms<=0?'zero':''}" id="host-timer" style="font-size:54px;margin:4px 0">${Math.ceil(ms/1000)}<span class="unit" style="font-size:20px">秒</span></div>
       <button class="small ghost" data-act="skip">⏭ スキップ</button></div>`;
