@@ -404,10 +404,11 @@ function parseAnswerText(str, max, called, allowed){
 
 /* ---------- 道具（3匹から1匹モードで「道具あり」のとき） ---------- */
 /* 強い順。説明の数字（確率）は管理ページの設定で変わる */
-/* 強い順。desc は初期の説明文（管理ページで書き換えられる）。{確率} はその道具の確率（管理ページの設定）に置き換わる */
+/* 強い順。desc は初期の説明文（管理ページで書き換えられる）。{確率} はその道具の確率（管理ページの設定）、
+   {最後確率} はフォーカスレンズの「一番最後になる確率」、{文字数} はいのちのたまで選べる文字数（ゲーム前は「参加人数＋1」、ゲーム中は実際の数）に置き換わる */
 const ITEM_PCT = { hikari:'pHikari', kiai:'pKiai', bakuhatsu:'pBaku', koukaku:'pKoukaku', tsume:'pTsume', focus:'pFocus' };
 const ITEMS = {
-  inochi:  { name:'いのちのたま',     desc:'文字を3つまで選べる。そのかわり、自分のターンの最後（時間切れで何も選ばなかったときも）に、自分のポケモンの文字が1種類ランダムで開く。正解したあとのもう1回は1文字で、このときは開かない。ターンがパスになったときも開かない。' },
+  inochi:  { name:'いのちのたま',     desc:'文字を{文字数}つまで選べる。そのかわり、自分のターンの最後（時間切れで何も選ばなかったときも）に、自分のポケモンの文字が1種類ランダムで開く。正解したあとのもう1回は1文字で、このときは開かない。ターンがパスになったときも開かない。' },
   megane:  { name:'みとおしメガネ',   desc:'ほかの人のポケモンの名前が何文字かが、自分のスマホに表示される。' },
   gotsu:   { name:'ゴツゴツメット',   desc:'ほかの人の回答で自分の文字が開いたとき、開いていないマスの数が回答した人より少なければ、回答した人の文字が1種類ランダムで開く（自分のポケモンにある文字は選ばれない）。' },
   hikari:  { name:'ひかりのこな',     desc:'ほかの人のターンが始まるとき、{確率}%の確率でそのターンがパスになる。' },
@@ -416,7 +417,7 @@ const ITEMS = {
   koukaku: { name:'こうかくレンズ',   desc:'自分のターンの始まりに{確率}%の確率で、ほかの人（負けた人は除く）の文字が1種類ランダムで開く（自分のポケモンにある文字は選ばれない）。これがこのターンの回答になり、もう1回はない。' },
   tsume:   { name:'せんせいのツメ',   desc:'回答順を決めるとき、1番になる確率が{確率}%上がる。' },
   herb:    { name:'メンタルハーブ',   desc:'道具の効果で自分の文字が開きそうになったとき（自分が狙われたときも、ほかの人と同じ文字で巻き込まれるときも）、何回でも防ぐ。その効果は取り消しになり、誰の文字も開かない。' },
-  focus:   { name:'フォーカスレンズ', desc:'最初の回答順で一番最後になったとき、自分のターンのたびに{確率}%の確率で文字を2つ選べる。' }
+  focus:   { name:'フォーカスレンズ', desc:'回答順を決めるとき、{最後確率}%の確率で一番最後になる。最初の回答順で一番最後になったとき、自分のターンのたびに{確率}%の確率で文字を2つ選べる。' }
 };
 const ITEM_KEYS = Object.keys(ITEMS);
 /* ほかの人に道具が公開される（「？」から変わる）タイミング */
@@ -446,9 +447,13 @@ const ITEM_NOTE = '道具の効果で開いた文字では、ほかの道具は�
 function itemName(k){ return ITEMS[k] ? ITEMS[k].name : ''; }
 /** 説明文のもと（管理ページで書き換えたものがあればそれ） */
 function itemDescTemplate(k){ const c=appData.itemDescs && appData.itemDescs[k]; return (c && c.trim()) ? c.trim() : (ITEMS[k] ? ITEMS[k].desc : ''); }
-function itemDesc(k, s, kind){
+/** n＝このゲームの参加人数（ゲーム前は省略 → 「参加人数＋1」と表記） */
+function inochiMax(n){ return n ? n+1 : null; }
+function itemDesc(k, s, kind, n){
   s=s||appData.settings;
-  const t=itemDescTemplate(k).replace(/\{確率\}/g, ITEM_PCT[k] ? String(s[ITEM_PCT[k]]) : '');
+  const t=itemDescTemplate(k).replace(/\{確率\}/g, ITEM_PCT[k] ? String(s[ITEM_PCT[k]]) : '')
+    .replace(/\{最後確率\}/g, String(s.pFocusLast))
+    .replace(/\{文字数\}/g, n ? String(inochiMax(n)) : '（参加人数＋1）');
   return kind==='yoji' ? t.replace(/ポケモンの名前/g,'四字熟語の読み').replace(/ポケモン/g,'四字熟語') : t;
 }
 /** 道具一覧（ポップアップ用） */
@@ -458,9 +463,9 @@ function itemListHtml(s, kind){
 }
 
 /* ---------- 設定 ---------- */
-const PCT_KEYS = ['itemRate','pHikari','pKiai','pBaku','pKoukaku','pTsume','pFocus'];   // 0〜100（%）
+const PCT_KEYS = ['itemRate','pHikari','pKiai','pBaku','pKoukaku','pTsume','pFocus','pFocusLast'];   // 0〜100（%）
 function defaultSettings(){ return { selectSec:45, answerSec:45, bonusSec:45, revealSec:5, itemEventSec:2,
-  itemRate:90, pHikari:10, pKiai:30, pBaku:10, pKoukaku:10, pTsume:20, pFocus:30 }; }
+  itemRate:90, pHikari:10, pKiai:30, pBaku:10, pKoukaku:10, pTsume:20, pFocus:30, pFocusLast:30 }; }
 const DEFAULT_RULE_SLIDES=[{img:null, groups:[
   '全員のスマホにポケモンが配られます（<b>6匹から3匹</b> か <b>3匹から1匹</b>）。選んだポケモンが手持ちになります。',
   '回答順に、<span class="rule-red">文字を1つ</span>（2文字モードでは最大2つ）選んでコールします。',
@@ -683,7 +688,7 @@ function snapshotFor(pid){
   const h=g.hands[pid];
   Object.assign(snap, { gameId:g.id, label:g.label, practice:g.practice, member:!!h,
     calledChars:g.called.chars, keepN:gKeep(g), maxChars:gMaxChars(g), allowedChars:gAllowed(g), items:!!g.items,
-    itemInfo: g.items ? ITEM_KEYS.reduce((o,k)=>(o[k]={name:itemName(k), desc:itemDesc(k, S(), g.wordSet)},o), {}) : null,
+    itemInfo: g.items ? ITEM_KEYS.reduce((o,k)=>(o[k]={name:itemName(k), desc:itemDesc(k, S(), g.wordSet, g.members.length)},o), {}) : null,
     orderNames: ph==='select' ? [] : g.turnOrder.map(pname) });
   if(h){
     snap.out=g.out.includes(pid);
@@ -840,14 +845,17 @@ function finishSelect(){
 }
 /** 回答順：せんせいのツメを持っている人は、1番になる重みが＋○%（足し算）。2番目以降はランダム */
 function decideOrder(g){
-  const ms=g.members, n=ms.length, base=100/n;
+  const all=g.members;
+  // フォーカスレンズ：○%の確率で一番最後になる（先に決める。外れたらふつうのランダム）
+  const fl=shuffle(all.filter(p=>itemOf(g,p)==='focus')).find(()=>roll(S().pFocusLast));
+  const ms=all.filter(p=>p!==fl), n=ms.length, base=100/n;
   const w=ms.map(p=>base + (itemOf(g,p)==='tsume' ? S().pTsume : 0));
   let x=Math.random()*w.reduce((a,b)=>a+b,0), first=ms[n-1];
   for(let i=0;i<n;i++){ x-=w[i]; if(x<0){ first=ms[i]; break; } }
-  const order=[first].concat(shuffle(ms.filter(p=>p!==first)));
+  const order=[first].concat(shuffle(ms.filter(p=>p!==first && p!==fl)), fl ? [fl] : []);
   if(itemOf(g, first)==='tsume') revealNow(g, first);   // ツメ：持ち主が1番になったときだけ公開
   g.focusLast=order[order.length-1];
-  const meganes=ms.filter(p=>itemOf(g,p)==='megane');   // みとおしメガネ：ゲーム開始時に公開
+  const meganes=all.filter(p=>itemOf(g,p)==='megane');   // みとおしメガネ：ゲーム開始時に公開
   meganes.forEach(p=>revealNow(g,p));
   if(g.items) g.orderNote = [itemOf(g, first)==='tsume' ? `✨ ${pname(first)}さんの「せんせいのツメ」！` : '',
     meganes.length ? `👓 ${meganes.map(pname).join('さん・')}さんは「みとおしメガネ」を持っています` : ''].filter(Boolean).join('　');
@@ -939,7 +947,7 @@ function checkOver(newOut){
 function turnMax(g){
   const t=g.turn; if(!t) return gMaxChars(g);
   if(t.bonus) return 1;
-  if(itemOf(g, t.pid)==='inochi') return 3;
+  if(itemOf(g, t.pid)==='inochi') return inochiMax(g.members.length);   // 参加人数＋1
   if(t.focus) return Math.max(2, gMaxChars(g));
   return gMaxChars(g);
 }
@@ -1013,7 +1021,7 @@ function turnStartItems(g, pid){
     endOfTurn(g, pid, events); toReveal(g); return true;
   }
   g.turnNotes=[];
-  if(itemOf(g,pid)==='inochi') revealNow(g, pid);   // いのちのたま：自分の最初のターンが始まったら公開（このターンから文字3つまで）
+  if(itemOf(g,pid)==='inochi') revealNow(g, pid);   // いのちのたま：自分の最初のターンが始まったら公開（このターンから文字「参加人数＋1」つまで）
   // こうかくレンズ：ほかの人（負けた人は除く）を1人選び、その人の文字を1種類開く。これがこのターンの回答（もう1回なし）
   if(itemOf(g,pid)==='koukaku' && roll(S().pKoukaku)){
     reveal(g, pid);
@@ -1188,7 +1196,7 @@ function onHostClick(e){
   else if(act==='honban-now') startHonbanNow();
   else if(act==='next-game'){ loadAppData().then(()=>{ gs.settings=JSON.parse(JSON.stringify(appData.settings)); dealGame(b.dataset.practice==='1'); }); }
   else if(act==='to-lobby'){ gs.game=null; gs.phase='lobby'; commit(); }
-  else if(act==='item-tip'){ const k=b.dataset.item; openModal(`<div style="display:flex;gap:12px;align-items:center">${itemImg(k,64)}<h3 style="margin:0">${esc(itemName(k))}</h3></div><p style="font-size:17px;line-height:1.6">${esc(itemDesc(k, S(), G()?G().wordSet:'poke'))}</p>`); }
+  else if(act==='item-tip'){ const k=b.dataset.item; openModal(`<div style="display:flex;gap:12px;align-items:center">${itemImg(k,64)}<h3 style="margin:0">${esc(itemName(k))}</h3></div><p style="font-size:17px;line-height:1.6">${esc(G() ? itemDesc(k, S(), G().wordSet, G().members.length) : itemDesc(k, S(), 'poke'))}</p>`); }
   else if(act==='item-list'){ loadAppData().then(()=>openModal(`<h3>道具一覧（強い順）</h3>${itemListHtml(appData.settings, gs.opt.set)}`)); }
   else if(act==='gens-all'){ gs.opt.gens=allGens(); lsSet(LS.opt, gs.opt); saveState(); renderHost(); }
 }
@@ -1249,7 +1257,7 @@ function itemBadge(g, p){
   if(!k) return '<span class="ibadge">道具：なし</span>';
   // 効果は吹き出しで重ねて出す（枠の大きさは変えない）。この結果で公開された道具は自動で出す。ほかはマウスを乗せる／クリックで出す
   const justNow = gs.phase==='reveal' && r && r.events.slice(0, shownEvents(g)).some(e=>(e.reveals||[]).includes(p));
-  return `<span class="ibadge on ${justNow?'show-tip':''}" data-act="item-tip" data-item="${k}">${itemImg(k,34)}${esc(itemName(k))}<span class="itip"><b>${esc(itemName(k))}</b>${esc(itemDesc(k, S(), g.wordSet))}</span></span>`;
+  return `<span class="ibadge on ${justNow?'show-tip':''}" data-act="item-tip" data-item="${k}">${itemImg(k,34)}${esc(itemName(k))}<span class="itip"><b>${esc(itemName(k))}</b>${esc(itemDesc(k, S(), g.wordSet, g.members.length))}</span></span>`;
 }
 function playersHtml(g, showAll){
   const just = g.lastResult && gs.phase==='reveal' ? g.lastResult.vals.concat(g.lastResult.events.slice(0, shownEvents(g)).flatMap(e=>e.letters)) : [];
@@ -1275,7 +1283,7 @@ function turnBarHtml(g){
     const ms=Math.max(0, g.turn.endsAt-Date.now()), mx=turnMax(g);
     right=`<div class="turn-now"><div class="who">${esc(pname(g.turn.pid))}<small> さんの番</small></div>
       ${g.turn.bonus?'<div class="bonus-lbl">⭕ もう1回！（文字1つ）</div>':''}
-      ${!g.turn.bonus && itemOf(g, g.turn.pid)==='inochi'?'<div class="bonus-lbl" style="background:#f3a6d0">🔴 いのちのたま：文字3つまで</div>':''}
+      ${!g.turn.bonus && itemOf(g, g.turn.pid)==='inochi'?`<div class="bonus-lbl" style="background:#f3a6d0">🔴 いのちのたま：文字${inochiMax(g.members.length)}つまで</div>`:''}
       ${(g.turnNotes||[]).map(t=>`<div class="bonus-lbl" style="background:#ffd8a8">${esc(t)}</div>`).join('')}
       <div class="turn-timer timer ${ms<=0?'zero':''}" id="host-timer" style="font-size:54px;margin:4px 0">${Math.ceil(ms/1000)}<span class="unit" style="font-size:20px">秒</span></div>
       <button class="small ghost" data-act="skip">⏭ スキップ</button></div>`;
@@ -1570,16 +1578,16 @@ function renderSub(){
 function ansMax(s){ s=s||sub; return s && s.turn ? (s.turn.maxChars || (s.turn.bonus ? 1 : (s.maxChars||2))) : 1; }
 function ownChars(s){ s=s||sub; return new Set((s && s.mine || []).flatMap(pk=>[...pk.n])); }
 function answerHtml(s){
-  if(subAns.turnId!==s.turn.id) subAns={turnId:s.turn.id, c1:'', c2:'', c3:'', text:'', sent:false};
+  if(subAns.turnId!==s.turn.id) subAns={turnId:s.turn.id, text:'', sent:false};
   if(subAns.sent) return `<div class="p-center" style="padding:16px"><div class="spinner"></div><h3>送信しました</h3><p>ホストの画面を見てください</p></div>`;
   const max=ansMax(s), own=ownChars(s);
   const chars=(s.allowedChars||TABLE_CHARS).filter(c=>!s.calledChars.includes(c));
   const opt=(cur, ph)=>`<option value="">${ph}</option>`+chars.map(c=>`<option value="${esc(c)}" ${c===cur?'selected':''} ${own.has(c)?'class="own"':''}>${esc(c)}${own.has(c)?'（自分）':''}</option>`).join('');
-  const nums=['1文字目','2文字目（なし）','3文字目（なし）'];
+  const nums=[...Array(max).keys()].map(i=>i===0?'1文字目':`${i+1}文字目（なし）`);
   const ex = TABLE_KIND==='yoji' ? 'かいて' : 'カイテ';
   return `<div class="ans-box">
       <div class="lbl">文字を選ぶ（${max===1?'1つ':`最大${max}つ`}）</div>
-      <div class="${max>1?'ans-sels':''}" style="${max===3?'grid-template-columns:1fr 1fr 1fr':''}">${[...Array(max).keys()].map(i=>`<select id="a-c${i+1}">${opt(subAns['c'+(i+1)], max===1?'文字を選ぶ':nums[i])}</select>`).join('')}</div>
+      <div class="${max>1?'ans-sels':''}" style="${max>=3?'grid-template-columns:1fr 1fr 1fr':''}">${[...Array(max).keys()].map(i=>`<select id="a-c${i+1}">${opt(subAns['c'+(i+1)]||'', max===1?'文字を選ぶ':nums[i])}</select>`).join('')}</div>
       <div class="lbl" style="margin-top:12px">解答欄に入力してもOK（${TABLE_KIND==='yoji'?'カタカナでも大丈夫':'ひらがなでも大丈夫'}）</div>
       <input type="text" id="a-text" value="${esc(subAns.text)}" placeholder="例：${ex.slice(0,max)}" autocomplete="off" autocapitalize="off" spellcheck="false">
       <div class="ans-err" id="a-err"></div>
@@ -1591,16 +1599,14 @@ function answerHtml(s){
 }
 function ansVals(){
   const max=ansMax();
-  return [...new Set([subAns.c1, max>=2?subAns.c2:'', max>=3?subAns.c3:''].filter(Boolean))].slice(0,max);
+  return [...new Set([...Array(max).keys()].map(i=>subAns['c'+(i+1)]).filter(Boolean))].slice(0,max);
 }
 /** 選択中の表示・赤い背景・決定ボタンを、画面を描き直さずに更新する */
 function updateAnsUI(){
   const box=document.querySelector('.ans-box'); if(!box || !sub || !sub.turn) return;
   const own=ownChars(), vals=ansVals();
-  const c1=document.getElementById('a-c1'), c2=document.getElementById('a-c2'), tx=document.getElementById('a-text');
-  if(c1){ c1.value=subAns.c1; c1.classList.toggle('own', own.has(subAns.c1)); }
-  if(c2){ c2.value=subAns.c2; c2.classList.toggle('own', own.has(subAns.c2)); }
-  const c3=document.getElementById('a-c3'); if(c3){ c3.value=subAns.c3||''; c3.classList.toggle('own', own.has(subAns.c3)); }
+  const tx=document.getElementById('a-text');
+  document.querySelectorAll('select[id^="a-c"]').forEach(el=>{ const v=subAns[el.id.slice(2)]||''; el.value=v; el.classList.toggle('own', own.has(v)); });
   const err=subAns.textErr||'';
   if(tx) tx.classList.toggle('own', !err && [...normalizeKana(tx.value)].some(c=>own.has(c)));
   document.getElementById('a-err').textContent=err;
@@ -1611,7 +1617,7 @@ function updateAnsUI(){
   document.getElementById('a-submit').disabled = !vals.length || !!err;
 }
 function onSubChange(e){
-  if(['a-c1','a-c2','a-c3'].includes(e.target.id)){
+  if(/^a-c\d+$/.test(e.target.id)){
     subAns[e.target.id.slice(2)]=e.target.value;
     // プルダウンで選んだら、解答欄も同じ文字にそろえる
     subAns.text=ansVals().join(''); subAns.textErr='';
@@ -1624,7 +1630,7 @@ function onSubInput(e){
   subAns.text=e.target.value;
   const r=parseAnswerText(e.target.value, ansMax(), sub.calledChars||[], sub.allowedChars);
   subAns.textErr=r.err;
-  subAns.c1=r.chars[0]||''; subAns.c2=r.chars[1]||''; subAns.c3=r.chars[2]||'';
+  for(let i=0;i<ansMax();i++) subAns['c'+(i+1)]=r.chars[i]||'';
   updateAnsUI();
 }
 function onSubClick(e){
@@ -1732,11 +1738,12 @@ function renderSettings(){
       <div class="lbl">こうかくレンズ</div><div class="row"><input type="number" id="s-pKoukaku" value="${s.pKoukaku}" min="0" max="100"> %</div>
       <div class="lbl">せんせいのツメ</div><div class="row">＋<input type="number" id="s-pTsume" value="${s.pTsume}" min="0" max="100"> %
         <span class="muted" style="font-size:13px">（1番になる確率に足す）</span></div>
-      <div class="lbl">フォーカスレンズ</div><div class="row"><input type="number" id="s-pFocus" value="${s.pFocus}" min="0" max="100"> %</div>
+      <div class="lbl">フォーカスレンズ</div><div class="row">一番最後になる <input type="number" id="s-pFocusLast" value="${s.pFocusLast}" min="0" max="100"> %　／　2文字になる <input type="number" id="s-pFocus" value="${s.pFocus}" min="0" max="100"> %</div>
+      <div class="lbl">いのちのたま</div><div class="muted" style="font-size:13px">選べる文字数は「参加人数＋1」（ゲームが始まると実際の数で表示）</div>
     </div>
     <h3 style="margin-top:18px">道具の説明文</h3>
-    <p class="muted" style="font-size:13px;margin-top:-6px">ゲーム中（スマホ・ホスト画面・道具一覧）に出る説明です。<b>{確率}</b> と書くと、上で設定した確率の数字に置き換わります。空にして保存すると初期の説明に戻ります。四字熟語のときは「ポケモン」が自動で「四字熟語」になります。</p>
-    <div id="item-desc-edit">${ITEM_KEYS.map(k=>`<div class="idesc-row">${itemImg(k,40)}<div style="flex:1"><div class="row" style="gap:6px"><b>${esc(itemName(k))}</b>${ITEM_PCT[k]?'<span class="muted" style="font-size:12px">（{確率} が使えます）</span>':''}<span class="spacer"></span><button type="button" class="small ghost" data-act="idesc-reset" data-k="${k}">初期の説明に戻す</button></div>
+    <p class="muted" style="font-size:13px;margin-top:-6px">ゲーム中（スマホ・ホスト画面・道具一覧）に出る説明です。<b>{確率}</b> と書くと上で設定した確率の数字に、<b>{最後確率}</b> はフォーカスレンズの「一番最後になる確率」に、<b>{文字数}</b> はいのちのたまで選べる文字数（ゲーム前は「参加人数＋1」、ゲーム中は実際の数）に置き換わります。空にして保存すると初期の説明に戻ります。四字熟語のときは「ポケモン」が自動で「四字熟語」になります。</p>
+    <div id="item-desc-edit">${ITEM_KEYS.map(k=>`<div class="idesc-row">${itemImg(k,40)}<div style="flex:1"><div class="row" style="gap:6px"><b>${esc(itemName(k))}</b>${ITEM_PCT[k]||k==='inochi'?`<span class="muted" style="font-size:12px">（${k==='inochi'?'{文字数}':k==='focus'?'{確率}・{最後確率}':'{確率}'} が使えます）</span>`:''}<span class="spacer"></span><button type="button" class="small ghost" data-act="idesc-reset" data-k="${k}">初期の説明に戻す</button></div>
       <textarea class="idesc" data-k="${k}" rows="2">${esc(itemDescTemplate(k))}</textarea></div></div>`).join('')}</div>
     <details style="margin-top:12px"><summary class="muted">道具の一覧と効果（保存した内容で表示）</summary>${itemListHtml(s, 'poke')}</details>`;
 }
