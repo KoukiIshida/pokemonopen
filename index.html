@@ -415,7 +415,7 @@ const ITEMS = {
   kiai:    { name:'きあいのハチマキ', desc:'負けになるとき（道具のせいでも）、{確率}%の確率で、全員が1回ずつターンを終えるまで耐える。その間も自分のターンでは回答できる。耐えている間に相手が全員負けたら勝ち。' },
   bakuhatsu:{ name:'ばくはつハチマキ', desc:'ほかの人の回答で自分の文字が開いたとき、{確率}%の確率で、ほかの人全員の文字が1種類ずつランダムで開く（自分のポケモンにある文字は選ばれない）。' },
   koukaku: { name:'こうかくレンズ',   desc:'自分のターンの始まりに{確率}%の確率で、ほかの人（負けた人は除く）の文字が1種類ランダムで開く（自分のポケモンにある文字は選ばれない）。これがこのターンの回答になり、もう1回はない。' },
-  tsume:   { name:'せんせいのツメ',   desc:'回答順を決めるとき、1番になる確率が{確率}%上がる。' },
+  tsume:   { name:'せんせいのツメ',   desc:'回答順を決めるとき、{確率}%の確率で1番になる。' },
   herb:    { name:'メンタルハーブ',   desc:'道具の効果で自分の文字が開きそうになったとき（自分が狙われたときも、ほかの人と同じ文字で巻き込まれるときも）、何回でも防ぐ。その効果は取り消しになり、誰の文字も開かない。' },
   focus:   { name:'フォーカスレンズ', desc:'回答順を決めるとき、{最後確率}%の確率で一番最後になる。最初の回答順で一番最後になったとき、自分のターンのたびに{確率}%の確率で文字を2つ選べる。' }
 };
@@ -448,12 +448,12 @@ function itemName(k){ return ITEMS[k] ? ITEMS[k].name : ''; }
 /** 説明文のもと（管理ページで書き換えたものがあればそれ） */
 function itemDescTemplate(k){ const c=appData.itemDescs && appData.itemDescs[k]; return (c && c.trim()) ? c.trim() : (ITEMS[k] ? ITEMS[k].desc : ''); }
 /** n＝このゲームの参加人数（ゲーム前は省略 → 「参加人数＋1」と表記） */
-function inochiMax(n){ return n ? n+1 : null; }
+function inochiMax(n, s){ s=s||(typeof gs!=='undefined'&&gs&&gs.settings)||appData.settings; return n ? n+(s.inochiAdd||0) : null; }
 function itemDesc(k, s, kind, n){
   s=s||appData.settings;
   const t=itemDescTemplate(k).replace(/\{確率\}/g, ITEM_PCT[k] ? String(s[ITEM_PCT[k]]) : '')
     .replace(/\{最後確率\}/g, String(s.pFocusLast))
-    .replace(/\{文字数\}/g, n ? String(inochiMax(n)) : '（参加人数＋1）');
+    .replace(/\{文字数\}/g, n ? String(inochiMax(n, s)) : `（参加人数${s.inochiAdd?'＋'+s.inochiAdd:''}）`);
   return kind==='yoji' ? t.replace(/ポケモンの名前/g,'四字熟語の読み').replace(/ポケモン/g,'四字熟語') : t;
 }
 /** 道具一覧（ポップアップ用） */
@@ -465,7 +465,7 @@ function itemListHtml(s, kind){
 /* ---------- 設定 ---------- */
 const PCT_KEYS = ['itemRate','pHikari','pKiai','pBaku','pKoukaku','pTsume','pFocus','pFocusLast'];   // 0〜100（%）
 function defaultSettings(){ return { selectSec:45, answerSec:45, bonusSec:45, revealSec:5, itemEventSec:2,
-  itemRate:90, pHikari:10, pKiai:30, pBaku:10, pKoukaku:10, pTsume:20, pFocus:30, pFocusLast:30 }; }
+  itemRate:90, pHikari:10, pKiai:30, pBaku:10, pKoukaku:10, pTsume:20, pFocus:30, pFocusLast:30, inochiAdd:1 }; }
 const DEFAULT_RULE_SLIDES=[{img:null, groups:[
   '全員のスマホにポケモンが配られます（<b>6匹から3匹</b> か <b>3匹から1匹</b>）。選んだポケモンが手持ちになります。',
   '回答順に、<span class="rule-red">文字を1つ</span>（2文字モードでは最大2つ）選んでコールします。',
@@ -504,6 +504,7 @@ function normalizeSettings(s){
   const d=defaultSettings(); s=Object.assign({}, d, s||{});
   ['selectSec','answerSec','bonusSec','revealSec','itemEventSec'].forEach(k=>{ const v=toInt(s[k]); s[k]=isNaN(v)||v<1?d[k]:v; });
   PCT_KEYS.forEach(k=>{ const v=toInt(s[k]); s[k]=isNaN(v)?d[k]:Math.max(0, Math.min(100, v)); });
+  { const v=toInt(s.inochiAdd); s.inochiAdd=isNaN(v)?d.inochiAdd:Math.max(0, Math.min(20, v)); }   // いのちのたま：参加人数＋○
   return s;
 }
 function mergeAppData(d){
@@ -848,10 +849,9 @@ function decideOrder(g){
   const all=g.members;
   // フォーカスレンズ：○%の確率で一番最後になる（先に決める。外れたらふつうのランダム）
   const fl=shuffle(all.filter(p=>itemOf(g,p)==='focus')).find(()=>roll(S().pFocusLast));
-  const ms=all.filter(p=>p!==fl), n=ms.length, base=100/n;
-  const w=ms.map(p=>base + (itemOf(g,p)==='tsume' ? S().pTsume : 0));
-  let x=Math.random()*w.reduce((a,b)=>a+b,0), first=ms[n-1];
-  for(let i=0;i<n;i++){ x-=w[i]; if(x<0){ first=ms[i]; break; } }
+  const ms=all.filter(p=>p!==fl);
+  // せんせいのツメ：○%の確率で1番になる（外れたらふつうのランダム。2人以上持っていたら順番に判定）
+  const first=shuffle(ms.filter(p=>itemOf(g,p)==='tsume')).find(()=>roll(S().pTsume)) || pickOne(ms);
   const order=[first].concat(shuffle(ms.filter(p=>p!==first && p!==fl)), fl ? [fl] : []);
   if(itemOf(g, first)==='tsume') revealNow(g, first);   // ツメ：持ち主が1番になったときだけ公開
   g.focusLast=order[order.length-1];
@@ -1736,10 +1736,11 @@ function renderSettings(){
       <div class="lbl">きあいのハチマキ</div><div class="row"><input type="number" id="s-pKiai" value="${s.pKiai}" min="0" max="100"> %</div>
       <div class="lbl">ばくはつハチマキ</div><div class="row"><input type="number" id="s-pBaku" value="${s.pBaku}" min="0" max="100"> %</div>
       <div class="lbl">こうかくレンズ</div><div class="row"><input type="number" id="s-pKoukaku" value="${s.pKoukaku}" min="0" max="100"> %</div>
-      <div class="lbl">せんせいのツメ</div><div class="row">＋<input type="number" id="s-pTsume" value="${s.pTsume}" min="0" max="100"> %
-        <span class="muted" style="font-size:13px">（1番になる確率に足す）</span></div>
+      <div class="lbl">せんせいのツメ</div><div class="row">1番になる <input type="number" id="s-pTsume" value="${s.pTsume}" min="0" max="100"> %
+        <span class="muted" style="font-size:13px">（外れたらふつうのランダム）</span></div>
       <div class="lbl">フォーカスレンズ</div><div class="row">一番最後になる <input type="number" id="s-pFocusLast" value="${s.pFocusLast}" min="0" max="100"> %　／　2文字になる <input type="number" id="s-pFocus" value="${s.pFocus}" min="0" max="100"> %</div>
-      <div class="lbl">いのちのたま</div><div class="muted" style="font-size:13px">選べる文字数は「参加人数＋1」（ゲームが始まると実際の数で表示）</div>
+      <div class="lbl">いのちのたま</div><div class="row">選べる文字数＝参加人数 ＋ <input type="number" id="s-inochiAdd" value="${s.inochiAdd}" min="0" max="20">
+        <span class="muted" style="font-size:13px">（ゲームが始まると実際の数で表示。例：＋1なら3人で4つ）</span></div>
     </div>
     <h3 style="margin-top:18px">道具の説明文</h3>
     <p class="muted" style="font-size:13px;margin-top:-6px">ゲーム中（スマホ・ホスト画面・道具一覧）に出る説明です。<b>{確率}</b> と書くと上で設定した確率の数字に、<b>{最後確率}</b> はフォーカスレンズの「一番最後になる確率」に、<b>{文字数}</b> はいのちのたまで選べる文字数（ゲーム前は「参加人数＋1」、ゲーム中は実際の数）に置き換わります。空にして保存すると初期の説明に戻ります。四字熟語のときは「ポケモン」が自動で「四字熟語」になります。</p>
@@ -1751,7 +1752,9 @@ function readSettings(){
   const v=id=>toInt(document.getElementById(id).value);
   const s={ selectSec:v('s-select'), answerSec:v('s-answer'), bonusSec:v('s-bonus'), revealSec:v('s-reveal'), itemEventSec:v('s-iev') };
   PCT_KEYS.forEach(k=>{ s[k]=v('s-'+k); });
+  s.inochiAdd=v('s-inochiAdd');
   const errors=[];
+  if(isNaN(s.inochiAdd)||s.inochiAdd<0||s.inochiAdd>20) errors.push('いのちのたまの「参加人数＋」は0〜20の整数で入力してください');
   if(isNaN(s.itemEventSec)||s.itemEventSec<1) errors.push('道具の効果の表示間隔は1以上の整数で入力してください');
   if(PCT_KEYS.some(k=>isNaN(s[k])||s[k]<0||s[k]>100)) errors.push('道具の確率は0〜100の整数で入力してください');
   if(isNaN(s.selectSec)||s.selectSec<1) errors.push('ポケモンを選ぶ制限時間は1以上の整数で入力してください');
