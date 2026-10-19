@@ -410,7 +410,7 @@ const ITEM_PCT = { hikari:'pHikari', kiai:'pKiai', bakuhatsu:'pBaku', koukaku:'p
 const ITEMS = {
   inochi:  { name:'いのちのたま',     desc:'文字を{文字数}つまで選べる（正解したあとのもう1回は1文字）。そのかわり、自分のターンが終わったとき（正解してもう1回選んだときはそのあと。時間切れで何も選ばなかったときも）に、自分のポケモンの文字が1種類ランダムで開く。ターンがパスになったときは開かない。' },
   megane:  { name:'みとおしメガネ',   desc:'ほかの人のポケモンの名前が何文字かが、自分のスマホに表示される。' },
-  gotsu:   { name:'ゴツゴツメット',   desc:'ほかの人の回答で自分の文字が開いたとき、開いていないマスの数が回答した人より少なければ、回答した人の文字が1種類ランダムで開く（自分のポケモンにある文字は選ばれない）。' },
+  gotsu:   { name:'ゴツゴツメット',   desc:'ほかの人の回答で自分の文字が開いたとき、開いているマスの数が回答した人より多ければ、回答した人の文字が1種類ランダムで開く（自分のポケモンにある文字は選ばれない）。' },
   hikari:  { name:'ひかりのこな',     desc:'ほかの人のターンが始まるとき、{確率}%の確率でそのターンがパスになる。' },
   kiai:    { name:'きあいのハチマキ', desc:'負けになるとき（道具のせいでも）、{確率}%の確率で、全員が1回ずつターンを終えるまで耐える。その間も自分のターンでは回答できる。耐えている間に相手が全員負けたら勝ち。' },
   bakuhatsu:{ name:'ばくはつハチマキ', desc:'ほかの人の回答で自分の文字が開いたとき、{確率}%の確率で、ほかの人全員の文字が1種類ずつランダムで開く（自分のポケモンにある文字は選ばれない）。' },
@@ -876,6 +876,8 @@ function namesOf(g, p){ return (g.hands[p].final||[]).map(pk=>pk.n); }
 function isOut(g, p){ return g.out.includes(p); }
 function livingOthers(g, p){ return g.turnOrder.filter(q=>q!==p && !isOut(g,q)); }
 /** 開いていないマスの数 */
+/** 開いているマスの数（文字数が分からないように、開いた方で比べる） */
+function openedSlots(g, p){ return namesOf(g,p).reduce((a,n)=>a+[...n].filter(c=>TABLE_SET.has(c) && g.called.chars.includes(c)).length, 0); }
 function remainingSlots(g, p){ return namesOf(g,p).reduce((a,n)=>a+[...n].filter(c=>!charOpen(c, g.called.chars)).length, 0); }
 function fullyOpen(g, p){ return namesOf(g,p).every(n=>nameOpen(n, g.called.chars)); }
 /** その人のポケモンで、まだ開いていない文字（1種類ずつ）。exceptPid のポケモンにある文字は除く */
@@ -1063,8 +1065,8 @@ function applyAnswer(vals){
   (g.turnNotes||[]).forEach(t2=>ev(events, t2));
   if(g.items){
     const hitBy=q=>!isOut(g,q) && q!==pid && namesOf(g,q).some(n=>vals.some(v=>n.includes(v)));
-    // ゴツゴツメット：開いた後で比べる。2人分なら回答者は2文字開く
-    const helmets=g.turnOrder.filter(q=>hitBy(q) && itemOf(g,q)==='gotsu' && remainingSlots(g,q) < remainingSlots(g,pid));
+    // ゴツゴツメット：開いた後で、開いているマスの数が回答者より多ければ発動。2人分なら回答者は2文字開く
+    const helmets=g.turnOrder.filter(q=>hitBy(q) && itemOf(g,q)==='gotsu' && openedSlots(g,q) > openedSlots(g,pid));
     helmets.forEach(q=>{ reveal(g,q); itemOpen(g, q, 'gotsu', pid, true, events); });
     // ばくはつハチマキ：ほかの人全員の文字を1種類ずつ（持ち主の文字は選ばない）
     g.turnOrder.filter(q=>hitBy(q) && itemOf(g,q)==='bakuhatsu').forEach(q=>{
